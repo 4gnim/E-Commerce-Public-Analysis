@@ -1,11 +1,11 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
-import dashboard as st
+import streamlit as st
 import matplotlib.image as mpimg
 
 # Load dataset
-@st.cache_resource
+@st.cache_data
 def load_data():
     all_df = pd.read_csv('all_data.csv')
     customer = pd.read_csv('dataset/olist_customers_dataset.csv')
