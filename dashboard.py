@@ -1,7 +1,7 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
-import streamlit as st
+import dashboard as st
 import matplotlib.image as mpimg
 
 # Load dataset
