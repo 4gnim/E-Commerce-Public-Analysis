@@ -15,7 +15,7 @@ def load_data():
 all_df, customer, geolocation = load_data()
 
 # Dashboard UI
-st.title("📊 Dashboard Analisis Data Olist")
+st.title("📊 Dashboard Analisis Data E-Commerce Public")
 
 # Produk Terlaris
 st.header("🔥 Produk Terlaris dan Kurang Laris")
@@ -41,23 +41,34 @@ ax[1].set_title("Produk dengan Penjualan Terendah", loc="center", fontsize=18)
 ax[1].tick_params(axis='y', labelsize=15)
 st.pyplot(fig)
 
-# Status Pengiriman
-st.header("🚚 Status Pengiriman")
-delivery_status = all_df['order_status'].value_counts().sort_values(ascending=False)
+# Review Customer
+st.title("⭐ Kepuasan Pelanggan dengan Layanan E-Commerce")
+service_rating = all_df['review_score'].value_counts().sort_values(ascending=False)
 fig, ax = plt.subplots(figsize=(10, 5))
-sns.barplot(x=delivery_status.index, y=delivery_status.values, order=delivery_status.index, palette=colors, ax=ax)
-ax.set_title("Status Pengiriman yang Berhasil", fontsize=15)
-ax.set_xlabel("Status Pengiriman")
-ax.set_ylabel("Jumlah")
+sns.barplot(
+    x=service_rating.index,
+    y=service_rating.values,
+    order=service_rating.index,
+    palette=colors,
+    ax=ax
+)
+
+# Tambahkan judul dan label
+ax.set_title("Customer Review Score", fontsize=15)
+ax.set_xlabel("Review Score")
+ax.set_ylabel("Count")
 ax.tick_params(axis='x', labelsize=12)
+
+# Tampilkan plot di Streamlit
 st.pyplot(fig)
+
 
 # Lokasi dengan Jumlah Pelanggan Terbanyak
 st.header("📍 Lokasi dengan Jumlah Pelanggan Terbanyak")
 customers_location = customer.merge(geolocation, left_on='customer_zip_code_prefix', right_on='geolocation_zip_code_prefix', how='inner')
 brazil = mpimg.imread('brazil-map.jpeg')
 fig, ax = plt.subplots(figsize=(10, 10))
-customers_location.plot(kind="scatter", x="geolocation_lng", y="geolocation_lat", alpha=0.3, s=0.3, c='green', ax=ax)
+customers_location.plot(kind="scatter", x="geolocation_lng", y="geolocation_lat", alpha=0.3, s=0.3, c='yellow', ax=ax)
 ax.imshow(brazil, extent=[-73.98283055, -33.8, -33.75116944, 5.4])
 ax.set_title('Lokasi dengan Jumlah Pelanggan Terbanyak')
 ax.axis('off')
