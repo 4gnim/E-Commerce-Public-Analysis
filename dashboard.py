@@ -1,75 +1,101 @@
+import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
-import streamlit as st
-import matplotlib.image as mpimg
 
-# Load dataset
-@st.cache_data
-def load_data():
-    all_df = pd.read_csv('all_data.csv')
-    customer = pd.read_csv('dataset/olist_customers_dataset.csv')
-    geolocation = pd.read_csv('dataset/olist_geolocation_dataset.csv')
-    return all_df, customer, geolocation
+# Judul Dashboard
+st.title("Dashboard Analisis Data E-Commerce")
 
-all_df, customer, geolocation = load_data()
+# Load Data
+data = pd.read_csv('all_data.csv')
 
-# Dashboard UI
-st.title("📊 Dashboard Analisis Data E-Commerce Public")
+# Konversi kolom tanggal
+data['order_purchase_timestamp'] = pd.to_datetime(data['order_purchase_timestamp'])
+data['order_delivered_customer_date'] = pd.to_datetime(data['order_delivered_customer_date'])
 
-# Produk Terlaris
-st.header("🔥 Produk Terlaris dan Kurang Laris")
-product_count = all_df.groupby('product_category_name_english').product_id.count().reset_index()
-sorted_product = product_count.sort_values(by='product_id', ascending=False)
+# Sidebar untuk filter interaktif
+st.sidebar.header("Filter Data")
 
-fig, ax = plt.subplots(nrows=1, ncols=2, figsize=(24, 6))
-colors = ["#72BCD4", "#D3D3D3", "#D3D3D3", "#D3D3D3", "#D3D3D3"]
+# Filter berdasarkan rentang tanggal
+min_date = data['order_purchase_timestamp'].min()
+max_date = data['order_purchase_timestamp'].max()
+default_start_date = max_date - pd.DateOffset(months=6)
+default_end_date = max_date
+date_range = st.sidebar.date_input("Pilih Rentang Tanggal:", [default_start_date, default_end_date])
 
-sns.barplot(x="product_id", y="product_category_name_english", data=sorted_product.head(5), palette=colors, ax=ax[0])
-ax[0].set_ylabel(None)
-ax[0].set_xlabel(None)
-ax[0].set_title("Produk dengan Penjualan Tertinggi", loc="center", fontsize=18)
-ax[0].tick_params(axis='y', labelsize=15)
+if len(date_range) == 2:
+    data = data[(data['order_purchase_timestamp'] >= pd.to_datetime(date_range[0])) &
+                (data['order_purchase_timestamp'] <= pd.to_datetime(date_range[1]))]
 
-sns.barplot(x="product_id", y="product_category_name_english", data=sorted_product.sort_values(by="product_id", ascending=True).head(5), palette=colors, ax=ax[1])
-ax[1].set_ylabel(None)
-ax[1].set_xlabel(None)
-ax[1].invert_xaxis()
-ax[1].yaxis.set_label_position("right")
-ax[1].yaxis.tick_right()
-ax[1].set_title("Produk dengan Penjualan Terendah", loc="center", fontsize=18)
-ax[1].tick_params(axis='y', labelsize=15)
-st.pyplot(fig)
+# Filter berdasarkan kategori produk
+product_categories = data['product_category_name_english'].unique()
+selected_categories = st.sidebar.multiselect("Pilih Kategori Produk:", options=product_categories, default=product_categories)
+data = data[data['product_category_name_english'].isin(selected_categories)]
 
-# Review Customer
-st.title("⭐ Kepuasan Pelanggan dengan Layanan E-Commerce")
-service_rating = all_df['review_score'].value_counts().sort_values(ascending=False)
-fig, ax = plt.subplots(figsize=(10, 5))
-sns.barplot(
-    x=service_rating.index,
-    y=service_rating.values,
-    order=service_rating.index,
-    palette=colors,
-    ax=ax
-)
+# Filter berdasarkan wilayah
+states = data['customer_state'].dropna().unique()
+selected_states = st.sidebar.multiselect("Pilih Wilayah:", options=states, default=states)
+data = data[data['customer_state'].isin(selected_states)]
 
-# Tambahkan judul dan label
-ax.set_title("Customer Review Score", fontsize=15)
-ax.set_xlabel("Review Score")
-ax.set_ylabel("Count")
-ax.tick_params(axis='x', labelsize=12)
+# Visualisasi: 10 Produk Terlaris dalam 6 Bulan Terakhir
+if 'product_category_name_english' in data.columns and 'order_id' in data.columns:
+    st.subheader("Top 10 Produk dengan Transaksi Terbanyak (6 Bulan Terakhir)")
+    product_sales = data.groupby('product_category_name_english').size().reset_index(name='count').sort_values(by='count', ascending=False).head(10)
+    plt.figure(figsize=(10, 6))
+    sns.barplot(x='count', y='product_category_name_english', data=product_sales)
+    plt.xlabel('Jumlah Transaksi')
+    plt.ylabel('Nama Produk')
+    plt.title('10 Produk Terlaris dalam 6 Bulan Terakhir')
+    st.pyplot(plt)
 
-# Tampilkan plot di Streamlit
-st.pyplot(fig)
+# Visualisasi: Distribusi Skor Ulasan
+if 'review_score' in data.columns:
+    st.subheader("Distribusi dan Faktor yang Mempengaruhi Skor Ulasan Pelanggan")
+    plt.figure(figsize=(6, 4))
+    sns.boxplot(x=data['review_score'])
+    plt.title('Boxplot Distribusi Skor Ulasan')
+    plt.xlabel('Skor Ulasan')
+    st.pyplot(plt)
 
+# Visualisasi: Distribusi Skor Ulasan Berdasarkan Kategori Waktu Pengiriman
+if 'order_delivered_customer_date' in data.columns and 'order_purchase_timestamp' in data.columns and 'review_score' in data.columns:
+    data['actual_delivery_time'] = (data['order_delivered_customer_date'] - data['order_purchase_timestamp']).dt.days
+    data['delivery_category'] = pd.qcut(data['actual_delivery_time'], q=4, labels=["Sangat Cepat", "Cepat", "Lambat", "Sangat Lambat"])
+    plt.figure(figsize=(8, 5))
+    ax = sns.boxplot(x='delivery_category', y='review_score', data=data, palette="Set2")
+    medians = data.groupby("delivery_category")["review_score"].median()
+    for i, median in enumerate(medians):
+        ax.text(i, median + 0.1, f"{median:.1f}", horizontalalignment='center', fontsize=12, color='black')
+    plt.title("Distribusi Skor Ulasan Berdasarkan Kategori Waktu Pengiriman")
+    plt.xlabel("Kategori Waktu Pengiriman")
+    plt.ylabel("Skor Ulasan")
+    st.pyplot(plt)
 
-# Lokasi dengan Jumlah Pelanggan Terbanyak
-st.header("📍 Lokasi dengan Jumlah Pelanggan Terbanyak")
-customers_location = customer.merge(geolocation, left_on='customer_zip_code_prefix', right_on='geolocation_zip_code_prefix', how='inner')
-brazil = mpimg.imread('brazil-map.jpeg')
-fig, ax = plt.subplots(figsize=(10, 10))
-customers_location.plot(kind="scatter", x="geolocation_lng", y="geolocation_lat", alpha=0.3, s=0.3, c='yellow', ax=ax)
-ax.imshow(brazil, extent=[-73.98283055, -33.8, -33.75116944, 5.4])
-ax.set_title('Lokasi dengan Jumlah Pelanggan Terbanyak')
-ax.axis('off')
-st.pyplot(fig)
+# Visualisasi: Distribusi Skor Ulasan Berdasarkan Kategori Harga Produk
+if 'price' in data.columns and 'review_score' in data.columns:
+    data['price_category'] = pd.qcut(data['price'], q=4, labels=['Murah', 'Menengah', 'Mahal', 'Sangat Mahal'])
+    plt.figure(figsize=(9, 6))
+    sns.boxplot(x='price_category', y='review_score', data=data, palette='viridis')
+    plt.title("Distribusi Skor Ulasan Berdasarkan Kategori Harga Produk", fontsize=14, fontweight='bold')
+    plt.xlabel("Kategori Harga Produk", fontsize=12)
+    plt.ylabel("Skor Ulasan", fontsize=12)
+    plt.grid(True, linestyle='--', alpha=0.5)
+    st.pyplot(plt)
+
+# Visualisasi: 10 Wilayah dengan Pesanan Terbanyak
+if 'customer_state' in data.columns:
+    st.subheader("Top 10 Wilayah dengan Jumlah Pesanan Terbanyak (1 Tahun Terakhir)")
+    state_names = {
+        "SP": "São Paulo", "RJ": "Rio de Janeiro", "MG": "Minas Gerais", "RS": "Rio Grande do Sul", "PR": "Paraná",
+        "SC": "Santa Catarina", "BA": "Bahia", "DF": "Distrito Federal", "ES": "Espírito Santo", "GO": "Goiás"
+    }
+    data['customer_state'] = data['customer_state'].map(state_names)
+    top_states = data['customer_state'].value_counts().head(10)
+    plt.figure(figsize=(10, 6))
+    sns.barplot(x=top_states.values, y=top_states.index, palette='Set2')
+    plt.xlabel("Jumlah Pesanan")
+    plt.ylabel("Provinsi")
+    plt.title("10 Wilayah dengan Pesanan Terbanyak")
+    st.pyplot(plt)
+
+st.write("\n**Catatan:** Gunakan filter di sidebar untuk menyesuaikan data visualisasi.")
